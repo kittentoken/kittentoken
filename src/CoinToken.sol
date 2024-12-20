@@ -25,7 +25,6 @@ import {IUniswapV2Factory} from "lib/v2-core/contracts/interfaces/IUniswapV2Fact
 import {IUniswapV2Router02} from "lib/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {CheckAddress} from "lib/check-address/contracts/CheckAddress.sol";
-import {console} from "forge-std/console.sol";
 
 // Inherited ERC20 contract uses 18 decimals.
 contract CoinToken is ERC20, Ownable, ReentrancyGuard {
@@ -114,10 +113,10 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
             // Binance
             router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         } else if (block.chainid == 1) {
-            //Ethereum Mainnet
+            // Ethereum Mainnet
             router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         } else if (block.chainid == 42161) {
-            // Arbitrum.
+            // Arbitrum
             router = IUniswapV2Router02(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
         } else {
             revert InvalidChain();
@@ -292,7 +291,8 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
         } else if (to == pair) {
             multiplier = sellMultiplier;
         }
-        uint256 feeAmount = (tokenAmount * (liquidityFee + devFee + marketingFee + charityFee) * multiplier) / (100 * 1000);
+        uint256 feeAmount =
+            (tokenAmount * (liquidityFee + devFee + marketingFee + charityFee) * multiplier) / (100 * 1000);
         uint256 burnAmount = (tokenAmount * burnFee * multiplier) / (100 * 1000);
         uint256 transferAmount = tokenAmount - (feeAmount + burnAmount);
 
@@ -374,7 +374,8 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     function swapAndLiquify(uint256 ratio) private nonReentrant returns (uint256, uint256, uint256, uint256) {
         uint8 totalFee = getTotalFeeAmount() - burnFee;
         uint256 dynamicLiquidityFee = ratio > 30 ? 0 : liquidityFee;
-        uint256 tokenAmountToLiquify = dynamicLiquidityFee > 0 ? (swapTokensAtAmount * dynamicLiquidityFee) / (totalFee * 2) : 0;
+        uint256 tokenAmountToLiquify =
+            dynamicLiquidityFee > 0 ? (swapTokensAtAmount * dynamicLiquidityFee) / (totalFee * 2) : 0;
         uint256 amountToSwap = swapTokensAtAmount - tokenAmountToLiquify;
         uint256 amountEthBefore = address(this).balance;
 
@@ -449,7 +450,7 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
 
     // Recover any ERC20 tokens that might be accidentally sent to the contract's address.
     function clearStuckToken(address tokenAddress, uint256 tokens) external onlyOwner returns (bool) {
-        if(tokenAddress == address(this)) {
+        if (tokenAddress == address(this)) {
             revert InvalidAddress();
         }
 
@@ -556,5 +557,5 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     function getTotalFeeAmount() private view returns (uint8) {
         return liquidityFee + devFee + marketingFee + burnFee + charityFee;
     }
-
+    
 }
