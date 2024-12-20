@@ -25,6 +25,7 @@ import {IUniswapV2Factory} from "lib/v2-core/contracts/interfaces/IUniswapV2Fact
 import {IUniswapV2Router02} from "lib/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {CheckAddress} from "lib/check-address/contracts/CheckAddress.sol";
+import {console} from "forge-std/console.sol";
 
 // Inherited ERC20 contract uses 18 decimals.
 contract CoinToken is ERC20, Ownable, ReentrancyGuard {
@@ -225,14 +226,6 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
 
     // Add liquidity to pair. Triggered during the swapping process.
     function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private returns (uint256, uint256, uint256) {
-        if (balanceOf(address(this)) < tokenAmount) {
-            revert InsufficientTokenBalance();
-        }
-
-        if (address(this).balance < ethAmount) {
-            revert InsufficientEthBalance();
-        }
-
         (uint256 amountTokenAddedToPool, uint256 amountETHAddedToPool, uint256 amountLiquidityToken) =
             router.addLiquidityETH{value: ethAmount}(address(this), tokenAmount, 0, 0, owner(), block.timestamp);
 
@@ -257,8 +250,8 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     // Wallet token balance cannot be higher than the maxWallet amount unless the wallet address is excluded.
     // Function removeLimits() will set the maxWallet amount permanently to 100% of the total supply.
     function maxWalletCheck(address to, uint256 amount) private view {
-        if (to != pair && !isExcludedFromMaxTransactionAmount[to]) {
-            if (amount + balanceOf(to) > maxWallet) {
+        if (!isExcludedFromMaxTransactionAmount[to]) {
+            if ((amount + balanceOf(to)) > maxWallet) {
                 revert MaxWalletExceeded();
             }
         }
@@ -291,6 +284,7 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     }
 
     // Process the fees to the target wallet and burn tokens.
+    // Process the fees to the target wallet and burn tokens.
     function processFee(uint256 tokenAmount, address from, address to) private returns (uint256) {
         uint16 multiplier = 100;
         if (from == pair) {
@@ -298,10 +292,9 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
         } else if (to == pair) {
             multiplier = sellMultiplier;
         }
-        uint256 feeAmount =
-            (tokenAmount * (liquidityFee + devFee + marketingFee + charityFee) * multiplier) / (100 * 1000);
+        uint256 feeAmount = (tokenAmount * (liquidityFee + devFee + marketingFee + charityFee) * multiplier) / (100 * 1000);
         uint256 burnAmount = (tokenAmount * burnFee * multiplier) / (100 * 1000);
-        uint256 transferAmount = tokenAmount - feeAmount - burnAmount;
+        uint256 transferAmount = tokenAmount - (feeAmount + burnAmount);
 
         // Transfer the fees
         if (feeAmount > 0) {
@@ -381,8 +374,7 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     function swapAndLiquify(uint256 ratio) private nonReentrant returns (uint256, uint256, uint256, uint256) {
         uint8 totalFee = getTotalFeeAmount() - burnFee;
         uint256 dynamicLiquidityFee = ratio > 30 ? 0 : liquidityFee;
-        uint256 tokenAmountToLiquify =
-            dynamicLiquidityFee > 0 ? (swapTokensAtAmount * dynamicLiquidityFee) / (totalFee * 2) : 0;
+        uint256 tokenAmountToLiquify = dynamicLiquidityFee > 0 ? (swapTokensAtAmount * dynamicLiquidityFee) / (totalFee * 2) : 0;
         uint256 amountToSwap = swapTokensAtAmount - tokenAmountToLiquify;
         uint256 amountEthBefore = address(this).balance;
 
@@ -457,6 +449,10 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
 
     // Recover any ERC20 tokens that might be accidentally sent to the contract's address.
     function clearStuckToken(address tokenAddress, uint256 tokens) external onlyOwner returns (bool) {
+        if(tokenAddress == address(this)) {
+            revert InvalidAddress();
+        }
+
         if (tokens == 0) {
             tokens = ERC20(tokenAddress).balanceOf(address(this));
         }
@@ -531,7 +527,7 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     }
 
     function setExclusionFromMaxTransaction(address account, bool boolValue) external onlyOwner {
-        if (account == ZERO_ADDRESS || account == DEAD_ADDRESS) {
+        if (account == ZERO_ADDRESS || account == DEAD_ADDRESS || account == pair) {
             revert FailedSetter();
         }
 
@@ -560,4 +556,5 @@ contract CoinToken is ERC20, Ownable, ReentrancyGuard {
     function getTotalFeeAmount() private view returns (uint8) {
         return liquidityFee + devFee + marketingFee + burnFee + charityFee;
     }
+
 }
